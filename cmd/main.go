@@ -47,14 +47,14 @@ func main() {
 	fmt.Println("Cluster State")
 	for _, id := range nodeIDs {
 		node := nodes[id]
-		fmt.Printf("Node %d: Role=%s, Term=%d\n", id, roleToString(node.GetRole()), node.GetCurrentTerm())
+		fmt.Printf("Node %d: Role=%s, Term=%d, Log Length=%d\n", id, roleToString(node.GetRole()), node.GetCurrentTerm(), node.GetLogLength())
 	}
 
 	time.Sleep(1 * time.Second)
 	fmt.Println("Cluster State")
 	for _, id := range nodeIDs {
 		node := nodes[id]
-		fmt.Printf("Node %d: Role=%s, Term=%d\n", id, roleToString(node.GetRole()), node.GetCurrentTerm())
+		fmt.Printf("Node %d: Role=%s, Term=%d, Log Length=%d\n", id, roleToString(node.GetRole()), node.GetCurrentTerm(), node.GetLogLength())
 	}
 }
 

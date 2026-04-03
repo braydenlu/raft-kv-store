@@ -90,6 +90,13 @@ func (node *Node) GetCurrentTerm() int {
 	return node.currentTerm
 }
 
+// GetLogLength returns the node's current log length.
+func (node *Node) GetLogLength() int {
+	node.mu.Lock()
+	defer node.mu.Unlock()
+	return len(node.log)
+}
+
 // RunElectionTimer starts the election timer loop
 func (node *Node) RunElectionTimer() {
 	node.runElectionTimer()
@@ -129,9 +136,8 @@ func (node *Node) HandleRequestVote(args rpc.RequestVoteArgs) rpc.RequestVoteRep
 	node.mu.Lock()
 	defer node.mu.Unlock()
 
-	term := node.currentTerm
 	if node.isStaleTerm(args.Term) {
-		return rpc.RequestVoteReply{Term: term}
+		return rpc.RequestVoteReply{Term: node.currentTerm}
 	}
 
 	node.updateTermAndRole(args.Term)
@@ -145,12 +151,12 @@ func (node *Node) HandleRequestVote(args rpc.RequestVoteArgs) rpc.RequestVoteRep
 			default:
 			}
 
-			return rpc.RequestVoteReply{Term: term, VoteGranted: true}
+			return rpc.RequestVoteReply{Term: node.currentTerm, VoteGranted: true}
 		}
 	} else if *node.votedFor == args.CandidateID {
-		return rpc.RequestVoteReply{Term: term, VoteGranted: true}
+		return rpc.RequestVoteReply{Term: node.currentTerm, VoteGranted: true}
 	}
-	return rpc.RequestVoteReply{Term: term, VoteGranted: false}
+	return rpc.RequestVoteReply{Term: node.currentTerm, VoteGranted: false}
 }
 
 // runElectionTimer runs the election timer loop in a background goroutine.
@@ -163,10 +169,12 @@ func (node *Node) runElectionTimer() {
 		case <-node.electionTimer.C:
 			node.mu.Lock()
 			if node.role != Leader {
+				node.mu.Unlock()
 				node.resetElectionTimer(node.randomElectionTimeout())
 				node.startElection()
+			} else {
+				node.mu.Unlock()
 			}
-			node.mu.Unlock()
 
 		case <-node.resetElectionChannel:
 			node.resetElectionTimer(node.randomElectionTimeout())
@@ -194,14 +202,16 @@ func (node *Node) randomElectionTimeout() time.Duration {
 // startElection initiates an election by incrementing the term and requesting votes from peers.
 // It waits for votes to be collected and transitions to leader if a majority is reached.
 func (node *Node) startElection() {
+	node.mu.Lock()
 	node.currentTerm++
 	node.role = Candidate
 	node.votedFor = &node.id
 	electionTerm := node.currentTerm
-	voteCount := 1
-
 	lastLogIndex := len(node.log) - 1
 	lastLogTerm := node.log[lastLogIndex].Term
+	node.mu.Unlock()
+
+	voteCount := 1
 
 	args := rpc.RequestVoteArgs{
 		Term:         electionTerm,
@@ -212,7 +222,9 @@ func (node *Node) startElection() {
 
 	majority := len(node.peers)/2 + 1
 	if voteCount >= majority {
+		node.mu.Lock()
 		node.role = Leader
+		node.mu.Unlock()
 		return
 	}
 
@@ -251,35 +263,28 @@ func (node *Node) initializeLeader() {
 	node.matchIndex = make(map[int]int)
 
 	term := node.currentTerm
-	logLen := len(node.log)
-
-	// append no-op for implicit commits
-	node.appendEntries(rpc.AppendEntriesArgs{
-		Term:         term,
-		LeaderID:     node.id,
-		PrevLogIndex: logLen - 1,
-		PrevLogTerm:  node.log[logLen-1].Term,
-		Entries:      []rpc.LogEntry{{Term: term, Index: logLen, Command: nil}},
-		LeaderCommit: node.commitIndex,
-	})
 
 	for _, id := range node.peers {
 		if id == node.id {
 			continue
 		}
 
-		// append initial no-op
-		node.network.SendAppendEntries(id, rpc.AppendEntriesArgs{
-			Term:         node.currentTerm,
-			LeaderID:     node.id,
-			PrevLogIndex: len(node.log) - 2,
-			PrevLogTerm:  node.log[len(node.log)-2].Term,
-			Entries:      node.log[logLen-1:],
-			LeaderCommit: node.commitIndex,
-		})
 		node.nextIndex[id] = len(node.log)
 		node.matchIndex[id] = 0
+
+		//go func(id int) {
+		//	for {
+		//		node.mu.Lock()
+		//		if node.role != Leader {
+		//			return
+		//		}
+		//		node.mu.Unlock()
+		//
+		//	}
+		//}(id)
 	}
+
+	node.log = append(node.log, rpc.LogEntry{Term: term, Index: len(node.log), Command: nil})
 }
 
 // appendEntries appends new entries from the leader to the node's log.
