@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"log/slog"
 	"math/rand/v2"
 	"raft-kv-store/rpc"
 	"sync"
@@ -204,6 +205,7 @@ func (node *Node) randomElectionTimeout() time.Duration {
 func (node *Node) startElection() {
 	node.mu.Lock()
 	node.currentTerm++
+	slog.Info("Node started election", "id", node.id, "term", node.currentTerm)
 	node.role = Candidate
 	node.votedFor = &node.id
 	electionTerm := node.currentTerm
@@ -272,19 +274,21 @@ func (node *Node) initializeLeader() {
 		node.nextIndex[id] = len(node.log)
 		node.matchIndex[id] = 0
 
-		//go func(id int) {
-		//	for {
-		//		node.mu.Lock()
-		//		if node.role != Leader {
-		//			return
-		//		}
-		//		node.mu.Unlock()
-		//
-		//	}
-		//}(id)
+		go func(id int) {
+			for {
+				node.mu.Lock()
+				if node.role != Leader {
+					return
+				}
+				node.mu.Unlock()
+				
+			}
+		}(id)
 	}
 
 	node.log = append(node.log, rpc.LogEntry{Term: term, Index: len(node.log), Command: nil})
+
+	runLeaderCore(node)
 }
 
 // appendEntries appends new entries from the leader to the node's log.
@@ -360,5 +364,6 @@ func (node *Node) updateTermAndRole(term int) {
 		node.role = Follower
 		node.votedFor = nil
 		node.currentTerm = term
+		slog.Info("Node updated term", "id", node.id, "new term", node.currentTerm)
 	}
 }

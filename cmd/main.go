@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"raft-kv-store/raft"
 	"raft-kv-store/rpc"
@@ -42,31 +41,5 @@ func main() {
 	}
 
 	log.Println("Cluster started with 3 nodes. Waiting for election completion")
-	time.Sleep(1 * time.Second)
-
-	fmt.Println("Cluster State")
-	for _, id := range nodeIDs {
-		node := nodes[id]
-		fmt.Printf("Node %d: Role=%s, Term=%d, Log Length=%d\n", id, roleToString(node.GetRole()), node.GetCurrentTerm(), node.GetLogLength())
-	}
-
-	time.Sleep(1 * time.Second)
-	fmt.Println("Cluster State")
-	for _, id := range nodeIDs {
-		node := nodes[id]
-		fmt.Printf("Node %d: Role=%s, Term=%d, Log Length=%d\n", id, roleToString(node.GetRole()), node.GetCurrentTerm(), node.GetLogLength())
-	}
-}
-
-func roleToString(role raft.Role) string {
-	switch role {
-	case raft.Follower:
-		return "Follower"
-	case raft.Candidate:
-		return "Candidate"
-	case raft.Leader:
-		return "Leader"
-	default:
-		return "Unknown"
-	}
+	time.Sleep(5 * time.Second)
 }
